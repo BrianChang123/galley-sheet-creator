@@ -136,6 +136,35 @@
   .s-gate-title { color: var(--red); font-weight: 700; text-align: center; font-size: 15px; }
   .s-gate-nums { color: var(--red); text-align: center; margin-top: 6px; }
   .min-h { min-height: 70px; }
+
+  /* ---------- Toast notifications ---------- */
+  .toast-wrap {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 360px;
+  }
+  .toast {
+    background: #1f2937;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity .25s, transform .25s;
+    border-left: 4px solid #6b7280;
+  }
+  .toast.show { opacity: 1; transform: translateX(0); }
+  .toast.err { border-left-color: #ef4444; }
+  .toast.ok { border-left-color: #10b981; }
+  .toast.info { border-left-color: #3b82f6; }
 </style>
 </head>
 <body>
@@ -159,23 +188,13 @@
 
     <fieldset>
       <legend>AI 메뉴 인식 (1st / 2nd Meal 자동 입력)</legend>
-      <div class="row">
-        <div>
-          <label>AI 제공자</label>
-          <select id="provider">
-            <option value="claude">Claude (Anthropic)</option>
-            <option value="gemini">Gemini (Google)</option>
-            <option value="openai">OpenAI (GPT)</option>
-          </select>
-        </div>
-        <div>
-          <label>모델</label>
-          <input type="text" id="model" value="claude-opus-4-8" />
-        </div>
-      </div>
-      <label>API Key</label>
-      <input type="password" id="apiKey" placeholder="Claude / Gemini / OpenAI API key" />
-      <div class="hint">키는 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다.</div>
+      <label>AI 도구 선택</label>
+      <select id="provider">
+        <option value="claude">Claude (Anthropic)</option>
+        <option value="gemini">Gemini (Google)</option>
+        <option value="openai">OpenAI (GPT)</option>
+      </select>
+      <div class="hint">API 키는 서버 환경변수(Vercel env)에서 관리됩니다. 페이지에서는 도구만 선택합니다.</div>
 
       <label>메뉴 이미지 첨부</label>
       <input type="file" id="mealImages" accept="image/*" multiple />
@@ -271,6 +290,7 @@
   </div>
 </div>
 
+<div id="toasts" class="toast-wrap"></div>
 <script src="app.js"></script>
 </body>
 </html>

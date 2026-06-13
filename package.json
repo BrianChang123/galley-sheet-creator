@@ -1,0 +1,9 @@
+{
+  "name": "galley-sheet-creator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Airline galley sheet creator with AI meal recognition and Excel export",
+  "engines": {
+    "node": ">=18"
+  }
+}

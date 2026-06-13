@@ -1,21 +1,15 @@
 "use strict";
 
 /* ============================================================
-   Galley Sheet Creator
+   Galley Sheet Creator (client)
    - Form input for an airline catering galley sheet
-   - AI meal recognition from images (Claude or Gemini)
+   - AI meal recognition via serverless proxy (/api/recognize)
+     -> API keys live in server env vars, never in the browser
    - Styled Excel (.xlsx) export matching the printed layout
    ============================================================ */
 
 const LS_KEY = "galleySheet.v1";
-const LS_KEY_SECRET = "galleySheet.secret.v1"; // apiKey/model/provider kept separate
-
-/* ---------- Default model per provider ---------- */
-const DEFAULT_MODELS = {
-  claude: "claude-opus-4-8",
-  gemini: "gemini-2.5-flash",
-  openai: "gpt-4o",
-};
+const LS_PROVIDER = "galleySheet.provider"; // non-secret UI preference
 
 /* ---------- DOM helpers ---------- */
 const $ = (id) => document.getElementById(id);
@@ -23,8 +17,6 @@ const els = {
   title: $("title"),
   pax: $("pax"),
   provider: $("provider"),
-  model: $("model"),
-  apiKey: $("apiKey"),
   mealImages: $("mealImages"),
   thumbs: $("thumbs"),
   recognizeBtn: $("recognizeBtn"),
@@ -46,7 +38,21 @@ const els = {
 /* ---------- In-memory state ---------- */
 let uploadedImages = []; // [{ name, mime, dataUrl, base64 }]
 
-/* dishes state lives in the DOM; helpers below read/write it */
+/* ============================================================
+   Toast notifications
+   ============================================================ */
+function toast(message, type = "info", ms = 4000) {
+  const wrap = $("toasts");
+  const t = document.createElement("div");
+  t.className = "toast " + type;
+  t.textContent = message;
+  wrap.appendChild(t);
+  requestAnimationFrame(() => t.classList.add("show"));
+  setTimeout(() => {
+    t.classList.remove("show");
+    setTimeout(() => t.remove(), 300);
+  }, ms);
+}
 
 /* ============================================================
    Dish rows (dynamic kr/en pairs)
@@ -112,7 +118,6 @@ function getModel() {
 
 /* ============================================================
    Build MEAL text block (lines) for preview + Excel
-   Each line: { text, bold, en }
    ============================================================ */
 function buildMealLines(model) {
   const lines = [];
@@ -154,24 +159,16 @@ function renderPreview() {
 }
 
 /* ============================================================
-   Persistence (localStorage)
+   Persistence (localStorage) — no secrets stored
    ============================================================ */
 function save() {
-  const m = getModel();
-  localStorage.setItem(LS_KEY, JSON.stringify(m));
-  localStorage.setItem(
-    LS_KEY_SECRET,
-    JSON.stringify({ provider: els.provider.value, model: els.model.value, apiKey: els.apiKey.value })
-  );
+  localStorage.setItem(LS_KEY, JSON.stringify(getModel()));
+  localStorage.setItem(LS_PROVIDER, els.provider.value);
 }
 
 function load() {
-  try {
-    const s = JSON.parse(localStorage.getItem(LS_KEY_SECRET) || "{}");
-    if (s.provider) els.provider.value = s.provider;
-    if (s.model) els.model.value = s.model;
-    if (s.apiKey) els.apiKey.value = s.apiKey;
-  } catch (_) {}
+  const provider = localStorage.getItem(LS_PROVIDER);
+  if (provider) els.provider.value = provider;
 
   let m = null;
   try {
@@ -205,19 +202,50 @@ function onChange() {
 }
 
 /* ============================================================
-   Image upload handling
+   Image upload handling (with downscaling to keep payload small)
    ============================================================ */
-function fileToImage(file) {
+const MAX_DIM = 1568; // long edge; keeps request body well under serverless limit
+
+function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const base64 = String(dataUrl).split(",")[1];
-      resolve({ name: file.name, mime: file.type || "image/jpeg", dataUrl, base64 });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
   });
+}
+
+function loadImageEl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function fileToImage(file) {
+  const original = await readFileAsDataURL(file);
+  try {
+    const img = await loadImageEl(original);
+    const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    return { name: file.name, mime: "image/jpeg", dataUrl, base64: dataUrl.split(",")[1] };
+  } catch (_) {
+    // Could not decode (e.g. HEIC) — fall back to the original bytes
+    return {
+      name: file.name,
+      mime: file.type || "image/jpeg",
+      dataUrl: original,
+      base64: String(original).split(",")[1],
+    };
+  }
 }
 
 els.mealImages.addEventListener("change", async (e) => {
@@ -225,7 +253,9 @@ els.mealImages.addEventListener("change", async (e) => {
   for (const f of files) {
     try {
       uploadedImages.push(await fileToImage(f));
-    } catch (_) {}
+    } catch (_) {
+      toast(`이미지를 읽지 못했습니다: ${f.name}`, "err");
+    }
   }
   renderThumbs();
 });
@@ -242,173 +272,65 @@ function renderThumbs() {
 }
 
 /* ============================================================
-   AI meal recognition
+   AI meal recognition (via serverless proxy)
    ============================================================ */
 function setStatus(msg, kind) {
   els.aiStatus.textContent = msg;
   els.aiStatus.className = "ai-status" + (kind ? " " + kind : "");
 }
 
-const EXTRACT_PROMPT = `You are reading an airline catering galley sheet / in-flight meal menu image.
-Extract the "1st Meal" and "2nd Meal" information.
-
-Return ONLY a valid JSON object, no markdown, no commentary, in exactly this shape:
-{
-  "first":  { "dishes": [ { "kr": "", "en": "" } ], "aBowl": "", "dBowl": "" },
-  "second": { "dishes": [ { "kr": "", "en": "" } ], "aBowl": "", "dBowl": "" }
-}
-
-Rules:
-- "kr" = Korean dish name (main dish line, without a leading dash).
-- "en" = the English translation, WITHOUT the surrounding parentheses. Empty string if none.
-- "aBowl" = the item after "A bowl :". "dBowl" = item after "D bowl :". Empty string if absent.
-- Each meal usually has 1-3 main dishes in "dishes".
-- If a meal is not present in the image, return it with an empty dishes array and empty bowls.
-- Output JSON only.`;
-
 async function recognizeMeals() {
   if (!uploadedImages.length) {
-    setStatus("먼저 메뉴 이미지를 첨부하세요.", "err");
-    return;
-  }
-  const apiKey = els.apiKey.value.trim();
-  if (!apiKey) {
-    setStatus("API Key를 입력하세요.", "err");
+    toast("먼저 메뉴 이미지를 첨부하세요.", "err");
+    setStatus("이미지를 첨부하세요.", "err");
     return;
   }
   const provider = els.provider.value;
-  const model = els.model.value.trim() || DEFAULT_MODELS[provider];
 
   els.recognizeBtn.disabled = true;
   setStatus("AI가 메뉴를 인식하는 중…", "busy");
 
   try {
-    const text =
-      provider === "claude"
-        ? await callClaude(apiKey, model)
-        : provider === "gemini"
-        ? await callGemini(apiKey, model)
-        : await callOpenAI(apiKey, model);
+    const res = await fetch("/api/recognize", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        images: uploadedImages.map((im) => ({ mime: im.mime, base64: im.base64 })),
+      }),
+    });
 
-    const data = parseJsonLoose(text);
+    let body = null;
+    try {
+      body = await res.json();
+    } catch (_) {}
+
+    if (!res.ok || !body || body.ok === false) {
+      const msg = body?.error || `요청 실패 (HTTP ${res.status})`;
+      toast(msg, "err", 6000);
+      setStatus("오류: " + msg, "err");
+      return;
+    }
+
+    const data = parseJsonLoose(body.text || "");
     applyExtraction(data);
     setStatus("✅ 인식 완료 — 필드를 확인/수정하세요.", "ok");
+    toast("메뉴 인식 완료", "ok", 2500);
   } catch (err) {
-    console.error(err);
-    setStatus("오류: " + (err?.message || err), "err");
+    const msg = "네트워크 오류: " + (err?.message || err);
+    toast(msg, "err", 6000);
+    setStatus(msg, "err");
   } finally {
     els.recognizeBtn.disabled = false;
   }
-}
-
-/* ---- Claude (Anthropic Messages API, direct browser call) ---- */
-async function callClaude(apiKey, model) {
-  const content = [
-    ...uploadedImages.map((im) => ({
-      type: "image",
-      source: { type: "base64", media_type: im.mime, data: im.base64 },
-    })),
-    { type: "text", text: EXTRACT_PROMPT },
-  ];
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2000,
-      messages: [{ role: "user", content }],
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Claude API ${res.status}: ${t.slice(0, 300)}`);
-  }
-  const json = await res.json();
-  return (json.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
-/* ---- Gemini (Google Generative Language API, direct browser call) ---- */
-async function callGemini(apiKey, model) {
-  const parts = [
-    ...uploadedImages.map((im) => ({
-      inline_data: { mime_type: im.mime, data: im.base64 },
-    })),
-    { text: EXTRACT_PROMPT },
-  ];
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
-  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0 },
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Gemini API ${res.status}: ${t.slice(0, 300)}`);
-  }
-  const json = await res.json();
-  const cand = json.candidates?.[0];
-  return (cand?.content?.parts || []).map((p) => p.text || "").join("\n");
-}
-
-/* ---- OpenAI (Chat Completions API, direct browser call) ---- */
-async function callOpenAI(apiKey, model) {
-  const content = [
-    { type: "text", text: EXTRACT_PROMPT },
-    ...uploadedImages.map((im) => ({
-      type: "image_url",
-      image_url: { url: im.dataUrl }, // data URL (base64) accepted directly
-    })),
-  ];
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: "Bearer " + apiKey,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content }],
-      max_tokens: 2000,
-      temperature: 0,
-      response_format: { type: "json_object" },
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`OpenAI API ${res.status}: ${t.slice(0, 300)}`);
-  }
-  const json = await res.json();
-  return json.choices?.[0]?.message?.content || "";
 }
 
 /* ---- Robust JSON parsing (strips code fences / surrounding prose) ---- */
 function parseJsonLoose(text) {
   if (!text) throw new Error("AI 응답이 비어 있습니다.");
   let t = text.trim();
-  // strip ```json ... ``` fences
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
-  // fallback: take from first { to last }
   if (!t.startsWith("{")) {
     const a = t.indexOf("{");
     const b = t.lastIndexOf("}");
@@ -442,10 +364,8 @@ els.recognizeBtn.addEventListener("click", recognizeMeals);
 
 /* ============================================================
    Excel export (ExcelJS) — mirrors the printed sheet layout
-   Grid: 4 columns (A..D). Borders, merges, bold headers, red text.
    ============================================================ */
 const THIN = { style: "thin", color: { argb: "FF000000" } };
-const ALL_BORDERS = { top: THIN, left: THIN, bottom: THIN, right: THIN };
 
 function applyBorderToRange(ws, top, left, bottom, right) {
   for (let r = top; r <= bottom; r++) {
@@ -467,7 +387,6 @@ async function exportExcel() {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
   });
 
-  // Column widths (4 columns)
   ws.getColumn(1).width = 30;
   ws.getColumn(2).width = 12;
   ws.getColumn(3).width = 12;
@@ -475,7 +394,7 @@ async function exportExcel() {
 
   const KR_FONT = { name: "Malgun Gothic" };
 
-  /* ---- Row 1: Header  <TITLE>   PAX : N ---- */
+  /* Row 1: Header */
   ws.mergeCells("A1:B1");
   ws.mergeCells("C1:D1");
   const titleCell = ws.getCell("A1");
@@ -488,7 +407,7 @@ async function exportExcel() {
   paxCell.alignment = { vertical: "middle", horizontal: "left" };
   ws.getRow(1).height = 30;
 
-  /* ---- MEAL block: A2:C13 (left), D2:D13 open area ---- */
+  /* MEAL block */
   const MEAL_TOP = 2, MEAL_BOTTOM = 13;
   ws.mergeCells(MEAL_TOP, 1, MEAL_BOTTOM, 3);
   ws.mergeCells(MEAL_TOP, 4, MEAL_BOTTOM, 4);
@@ -505,7 +424,7 @@ async function exportExcel() {
   mealCell.value = { richText };
   mealCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  /* ---- Middle band: SSR + 미취식 (A14:C18) | PAX note (D14:D18) ---- */
+  /* Middle band */
   const MID_TOP = 14, MID_BOTTOM = 18;
   ws.mergeCells(MID_TOP, 1, MID_BOTTOM, 3);
   ws.mergeCells(MID_TOP, 4, MID_BOTTOM, 4);
@@ -531,7 +450,7 @@ async function exportExcel() {
   };
   rightMid.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  /* ---- Bottom: 2 Door open Gate (A19:D22) ---- */
+  /* Bottom: Gate */
   const GATE_TOP = 19, GATE_BOTTOM = 22;
   ws.mergeCells(GATE_TOP, 1, GATE_BOTTOM, 4);
   for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 18;
@@ -544,15 +463,14 @@ async function exportExcel() {
   };
   gateCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
 
-  /* ---- Borders on every region (outer + section dividers) ---- */
-  applyBorderToRange(ws, 1, 1, 1, 4);                       // header
-  applyBorderToRange(ws, MEAL_TOP, 1, MEAL_BOTTOM, 3);      // meal left
-  applyBorderToRange(ws, MEAL_TOP, 4, MEAL_BOTTOM, 4);      // meal right
-  applyBorderToRange(ws, MID_TOP, 1, MID_BOTTOM, 3);        // mid left
-  applyBorderToRange(ws, MID_TOP, 4, MID_BOTTOM, 4);        // mid right
-  applyBorderToRange(ws, GATE_TOP, 1, GATE_BOTTOM, 4);      // gate
+  /* Borders */
+  applyBorderToRange(ws, 1, 1, 1, 4);
+  applyBorderToRange(ws, MEAL_TOP, 1, MEAL_BOTTOM, 3);
+  applyBorderToRange(ws, MEAL_TOP, 4, MEAL_BOTTOM, 4);
+  applyBorderToRange(ws, MID_TOP, 1, MID_BOTTOM, 3);
+  applyBorderToRange(ws, MID_TOP, 4, MID_BOTTOM, 4);
+  applyBorderToRange(ws, GATE_TOP, 1, GATE_BOTTOM, 4);
 
-  /* ---- Download ---- */
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
@@ -565,23 +483,16 @@ async function exportExcel() {
 }
 
 els.exportBtn.addEventListener("click", () => {
-  exportExcel().catch((e) => alert("엑셀 생성 오류: " + (e?.message || e)));
-});
-
-/* ============================================================
-   Provider switch updates the default model field
-   ============================================================ */
-els.provider.addEventListener("change", () => {
-  els.model.value = DEFAULT_MODELS[els.provider.value] || "";
-  onChange();
+  exportExcel().catch((e) => toast("엑셀 생성 오류: " + (e?.message || e), "err", 6000));
 });
 
 /* ============================================================
    Wire up change listeners + init
    ============================================================ */
+els.provider.addEventListener("change", onChange);
 [
   "title", "pax", "aBowl1", "dBowl1", "aBowl2", "dBowl2",
-  "ssr", "noMeal", "paxNote", "gate", "model", "apiKey",
+  "ssr", "noMeal", "paxNote", "gate",
 ].forEach((id) => els[id].addEventListener("input", onChange));
 
 load();
