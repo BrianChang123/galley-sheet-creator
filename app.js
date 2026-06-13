@@ -444,18 +444,23 @@ async function exportExcel() {
   paxCell.alignment = { vertical: "middle", horizontal: "left" };
   ws.getRow(1).height = 38;
 
-  /* MEAL block (~2/3 height; slightly smaller fonts so content still fits) */
-  const MEAL_TOP = 2, MEAL_BOTTOM = 8;
+  /* MEAL block — full-size fonts; block height fits the content so there is
+     no trailing whitespace (more lines -> taller block, less gate; fewer -> bigger gate). */
+  const mealLines = buildMealLines(m);
+  let mealContentPt = 14 * 1.4; // ●MEAL label line
+  mealLines.forEach((l) => { mealContentPt += (l.en ? 10 : 11) * 1.35; });
+  const MEAL_TOP = 2, MEAL_ROWS = 7, MEAL_BOTTOM = MEAL_TOP + MEAL_ROWS - 1;
+  const mealRowH = Math.ceil(mealContentPt / MEAL_ROWS);
   ws.mergeCells(MEAL_TOP, 1, MEAL_BOTTOM, 3);
   ws.mergeCells(MEAL_TOP, 4, MEAL_BOTTOM, 4);
-  for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = 27;
+  for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = mealRowH;
 
   const mealCell = ws.getCell(MEAL_TOP, 1);
-  const richText = [{ text: "●MEAL\n", font: { ...KR_FONT, bold: true, size: 12 } }];
-  buildMealLines(m).forEach((l) => {
+  const richText = [{ text: "●MEAL\n", font: { ...KR_FONT, bold: true, size: 14 } }];
+  mealLines.forEach((l) => {
     richText.push({
       text: l.text + "\n",
-      font: { ...KR_FONT, bold: !!l.bold, size: l.en ? 8 : 9, color: { argb: "FF000000" } },
+      font: { ...KR_FONT, bold: !!l.bold, size: l.en ? 10 : 11, color: { argb: "FF000000" } },
     });
   });
   mealCell.value = { richText };
@@ -497,10 +502,18 @@ async function exportExcel() {
   };
   rightMid.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  /* Bottom: Gate (enlarged to take the space freed from the MEAL block) */
-  const GATE_TOP = 17, GATE_BOTTOM = 25;
+  /* Bottom: Gate — absorbs whatever vertical space the MEAL block didn't use,
+     so the sheet fills one A4 page. */
+  const GATE_TOP = NOMEAL_BOTTOM + 1; // 17
+  const GATE_ROWS = 7;
+  const GATE_BOTTOM = GATE_TOP + GATE_ROWS - 1;
+  const HEADER_PT = 38;
+  const MIDDLE_PT = 28 * (NOMEAL_BOTTOM - SSR_TOP + 1); // SSR + 미취식 rows
+  const PAGE_PT = 760; // ~A4 portrait printable height target
+  const gatePt = Math.max(150, PAGE_PT - HEADER_PT - mealRowH * MEAL_ROWS - MIDDLE_PT);
+  const gateRowH = Math.ceil(gatePt / GATE_ROWS);
   ws.mergeCells(GATE_TOP, 1, GATE_BOTTOM, 4);
-  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 33;
+  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = gateRowH;
   const gateCell = ws.getCell(GATE_TOP, 1);
   gateCell.value = {
     richText: [
