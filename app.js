@@ -131,6 +131,8 @@ function buildMealLines(model) {
     if (meal.dBowl) lines.push({ text: "D bowl : " + meal.dBowl });
   };
   addMeal("1st Meal", model.first);
+  lines.push({ text: "", spacer: true }); // blank line(s) between 1st and 2nd meal
+  lines.push({ text: "", spacer: true });
   addMeal("2nd Meal", model.second);
   return lines;
 }
@@ -147,7 +149,7 @@ function renderPreview() {
     .map((l) => {
       const cls = l.bold ? "mh" : l.en ? "en" : "";
       const esc = l.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return `<div class="${cls}">${esc}</div>`;
+      return `<div class="${cls}">${esc || "&nbsp;"}</div>`;
     })
     .join("");
   $("pvMeal").innerHTML = mealHtml;
