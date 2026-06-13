@@ -206,13 +206,28 @@ function onChange() {
    ============================================================ */
 const MAX_DIM = 1568; // long edge; keeps request body well under serverless limit
 
-function readFileAsDataURL(file) {
+function readFileAsDataURL(blob) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result);
     r.onerror = reject;
-    r.readAsDataURL(file);
+    r.readAsDataURL(blob);
   });
+}
+
+/* HEIC/HEIF can't be decoded by <img>; detect so we can convert first. */
+function isHeic(file) {
+  const t = (file.type || "").toLowerCase();
+  const n = (file.name || "").toLowerCase();
+  return t.includes("heic") || t.includes("heif") || n.endsWith(".heic") || n.endsWith(".heif");
+}
+
+async function convertHeicToJpeg(file) {
+  if (typeof heic2any !== "function") {
+    throw new Error("HEIC 변환 모듈을 불러오지 못했습니다. JPEG/PNG로 업로드해 주세요.");
+  }
+  const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+  return Array.isArray(out) ? out[0] : out; // -> Blob (image/jpeg)
 }
 
 function loadImageEl(src) {
@@ -225,7 +240,9 @@ function loadImageEl(src) {
 }
 
 async function fileToImage(file) {
-  const original = await readFileAsDataURL(file);
+  // HEIC/HEIF -> JPEG first (OpenAI/Claude/Gemini reject HEIC)
+  const source = isHeic(file) ? await convertHeicToJpeg(file) : file;
+  const original = await readFileAsDataURL(source);
   try {
     const img = await loadImageEl(original);
     const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
@@ -238,10 +255,12 @@ async function fileToImage(file) {
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     return { name: file.name, mime: "image/jpeg", dataUrl, base64: dataUrl.split(",")[1] };
   } catch (_) {
-    // Could not decode (e.g. HEIC) — fall back to the original bytes
+    // Canvas downscale failed — fall back to the (possibly converted) source bytes.
+    // Derive the mime from the data URL so a converted HEIC is reported as jpeg, not heic.
+    const m = /^data:([^;]+);/.exec(String(original));
     return {
       name: file.name,
-      mime: file.type || "image/jpeg",
+      mime: m ? m[1] : source.type || "image/jpeg",
       dataUrl: original,
       base64: String(original).split(",")[1],
     };
@@ -253,8 +272,8 @@ els.mealImages.addEventListener("change", async (e) => {
   for (const f of files) {
     try {
       uploadedImages.push(await fileToImage(f));
-    } catch (_) {
-      toast(`이미지를 읽지 못했습니다: ${f.name}`, "err");
+    } catch (err) {
+      toast(`이미지 처리 실패: ${f.name} — ${err?.message || err}`, "err", 6000);
     }
   }
   renderThumbs();

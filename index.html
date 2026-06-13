@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Galley Sheet Creator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <style>
   :root {
     --bg: #f4f5f7;
@@ -197,7 +198,7 @@
       <div class="hint">API 키는 서버 환경변수(Vercel env)에서 관리됩니다. 페이지에서는 도구만 선택합니다.</div>
 
       <label>메뉴 이미지 첨부</label>
-      <input type="file" id="mealImages" accept="image/*" multiple />
+      <input type="file" id="mealImages" accept="image/*,.heic,.heif" multiple />
       <div class="thumbs" id="thumbs"></div>
       <div class="btn-row">
         <button class="btn" id="recognizeBtn">🔍 AI로 메뉴 인식</button>
