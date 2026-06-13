@@ -444,26 +444,26 @@ async function exportExcel() {
   paxCell.alignment = { vertical: "middle", horizontal: "left" };
   ws.getRow(1).height = 38;
 
-  /* MEAL block (~2/3 of its previous height) */
-  const MEAL_TOP = 2, MEAL_BOTTOM = 9;
+  /* MEAL block (~2/3 height; slightly smaller fonts so content still fits) */
+  const MEAL_TOP = 2, MEAL_BOTTOM = 8;
   ws.mergeCells(MEAL_TOP, 1, MEAL_BOTTOM, 3);
   ws.mergeCells(MEAL_TOP, 4, MEAL_BOTTOM, 4);
-  for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = 32;
+  for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = 27;
 
   const mealCell = ws.getCell(MEAL_TOP, 1);
-  const richText = [{ text: "●MEAL\n", font: { ...KR_FONT, bold: true, size: 14 } }];
+  const richText = [{ text: "●MEAL\n", font: { ...KR_FONT, bold: true, size: 12 } }];
   buildMealLines(m).forEach((l) => {
     richText.push({
       text: l.text + "\n",
-      font: { ...KR_FONT, bold: !!l.bold, size: l.en ? 10 : 11, color: { argb: "FF000000" } },
+      font: { ...KR_FONT, bold: !!l.bold, size: l.en ? 8 : 9, color: { argb: "FF000000" } },
     });
   });
   mealCell.value = { richText };
   mealCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
   /* Middle band: SSR and 미취식 are SEPARATE stacked cells (divider line between them) */
-  const SSR_TOP = 10, SSR_BOTTOM = 13;
-  const NOMEAL_TOP = 14, NOMEAL_BOTTOM = 17;
+  const SSR_TOP = 9, SSR_BOTTOM = 12;
+  const NOMEAL_TOP = 13, NOMEAL_BOTTOM = 16;
   for (let r = SSR_TOP; r <= NOMEAL_BOTTOM; r++) ws.getRow(r).height = 28;
 
   ws.mergeCells(SSR_TOP, 1, SSR_BOTTOM, 3);
@@ -497,10 +497,10 @@ async function exportExcel() {
   };
   rightMid.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  /* Bottom: Gate */
-  const GATE_TOP = 18, GATE_BOTTOM = 24;
+  /* Bottom: Gate (enlarged to take the space freed from the MEAL block) */
+  const GATE_TOP = 17, GATE_BOTTOM = 25;
   ws.mergeCells(GATE_TOP, 1, GATE_BOTTOM, 4);
-  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 30;
+  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 33;
   const gateCell = ws.getCell(GATE_TOP, 1);
   gateCell.value = {
     richText: [
