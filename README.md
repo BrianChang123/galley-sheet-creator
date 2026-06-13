@@ -20,14 +20,47 @@
 | **PAX 특이사항 및 약제공** | (엑셀에서 빨간 글씨) | 직접 입력 |
 | **2 Door open Gate** | (엑셀에서 빨간 글씨) | 직접 입력 |
 
-## AI 메뉴 인식
+## AI 메뉴 인식 (서버리스 프록시)
 
-- **AI 제공자**: Claude(Anthropic) / Gemini(Google) / OpenAI(GPT) 중 선택.
-- **모델**: 기본값 — Claude `claude-opus-4-8`, Gemini `gemini-2.5-flash`, OpenAI `gpt-4o` (수정 가능).
-- **API Key**: 사용자가 본인 키 입력. 키는 브라우저 `localStorage` 에만 저장되며 외부 서버로 전송되지 않습니다(AI 제공자 API로만 직접 호출).
-- 메뉴 이미지를 첨부하고 **🔍 AI로 메뉴 인식** 클릭 → 1st/2nd Meal 필드 자동 채움 → 직접 검토·수정 가능.
+- 페이지에서는 **AI 도구(Claude / Gemini / OpenAI)만 선택**합니다. API 키 입력칸은 없습니다.
+- 키는 **서버 환경변수**에만 존재하며 브라우저로 내려가지 않습니다. 요청 흐름:
+  `브라우저(도구+이미지) → /api/recognize (서버리스, 키는 env) → AI 제공자`
+- 메뉴 이미지 첨부 → **🔍 AI로 메뉴 인식** → 1st/2nd Meal 필드 자동 채움 → 검토·수정.
+- 이미지가 첨부됐는데 해당 키가 없거나 무효이면 **토스트 메시지**로 에러 안내.
+- 모델 기본값(env로 변경 가능): Claude `claude-opus-4-8`, Gemini `gemini-2.5-flash`, OpenAI `gpt-4o`.
 
-> 참고: 브라우저에서 Anthropic API 를 직접 호출하기 위해 `anthropic-dangerous-direct-browser-access` 헤더를 사용합니다. 개인/내부용 도구에 적합하며, 키 노출이 우려되는 공개 배포에는 서버 프록시 사용을 권장합니다.
+### 환경변수 (Vercel)
+
+| 변수 | 용도 | 비고 |
+|------|------|------|
+| `ANTHROPIC_API_KEY` | Claude 키 | Claude 선택 시 필요 |
+| `GEMINI_API_KEY` | Gemini 키 | Gemini 선택 시 필요 |
+| `OPENAI_API_KEY` | OpenAI 키 | OpenAI 선택 시 필요 |
+| `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL` | 모델 override (선택) | 미설정 시 기본값 사용 |
+
+> 사용할 제공자의 키만 설정하면 됩니다. 키가 없는 제공자를 선택하면 토스트로 "키가 서버에 설정되지 않았습니다" 안내가 뜹니다.
+
+## 배포 (Vercel)
+
+GitHub Pages는 정적 호스팅이라 서버리스 함수를 실행할 수 없으므로, AI 인식 기능은 **Vercel**(또는 동급 서버리스 호스팅)에 배포해야 동작합니다.
+
+### 방법 A — Vercel 대시보드 (CLI 불필요, 권장)
+1. https://vercel.com → **Add New… → Project** → GitHub의 `galley-sheet-creator` import.
+2. Framework Preset: **Other**, Build/Output 설정 비움 (정적 + `/api` 자동 인식).
+3. **Settings → Environment Variables** 에서 위 표의 키 추가 → **Deploy**.
+
+### 방법 B — Vercel CLI
+```bash
+npm i -g vercel
+cd galley-sheet-creator
+vercel            # 최초 배포 (프로젝트 연결)
+vercel env add ANTHROPIC_API_KEY     # 필요한 키들 추가
+vercel env add GEMINI_API_KEY
+vercel env add OPENAI_API_KEY
+vercel --prod     # 프로덕션 배포
+```
+
+> 로컬에서 `index.html` 을 직접 열면 `/api/recognize` 가 없어 AI 인식은 동작하지 않습니다(엑셀/미리보기는 정상). 전체 기능은 Vercel 배포 환경에서 확인하세요.
 
 ## 엑셀 출력
 
