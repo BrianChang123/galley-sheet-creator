@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Galley Sheet Creator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #d0d4da;
+    --line: #222;
+    --accent: #2563eb;
+    --accent-d: #1d4ed8;
+    --red: #d40000;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: #1f2430;
+    font-size: 14px;
+  }
+  header.app {
+    background: #111827;
+    color: #fff;
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header.app h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header.app .sub { color: #9ca3af; font-size: 12px; }
+  .layout {
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    gap: 18px;
+    padding: 18px;
+    align-items: start;
+  }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 0 0 16px;
+    padding: 12px 14px 14px;
+  }
+  legend { font-weight: 600; font-size: 13px; padding: 0 6px; color: #374151; }
+  label { display: block; font-size: 12px; color: #4b5563; margin: 10px 0 4px; font-weight: 500; }
+  input[type=text], input[type=number], input[type=password], textarea, select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+  }
+  textarea { resize: vertical; min-height: 56px; line-height: 1.4; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .dish {
+    display: grid;
+    grid-template-columns: 1fr 1fr 28px;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+  }
+  .btn {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn:hover { background: var(--accent-d); }
+  .btn.sec { background: #eef2f7; color: #374151; border: 1px solid var(--border); }
+  .btn.sec:hover { background: #e2e8f0; }
+  .btn.sm { padding: 5px 10px; font-size: 12px; }
+  .btn.icon { background: #fee2e2; color: #b91c1c; padding: 4px; line-height: 1; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .ai-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  .ai-status.ok { color: #047857; }
+  .ai-status.err { color: var(--red); }
+  .ai-status.busy { color: var(--accent); }
+  .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .export-bar { position: sticky; bottom: 0; }
+
+  /* ---------- Sheet preview (mirrors the printed galley sheet) ---------- */
+  .sheet-wrap { overflow: auto; }
+  table.sheet {
+    border-collapse: collapse;
+    width: 720px;
+    max-width: 100%;
+    background: #fff;
+    table-layout: fixed;
+    font-size: 13px;
+    color: var(--line);
+  }
+  table.sheet td {
+    border: 1.5px solid var(--line);
+    vertical-align: top;
+    padding: 8px 10px;
+  }
+  .s-title { font-weight: 700; font-size: 16px; }
+  .s-label { font-weight: 700; }
+  .s-meal { white-space: pre-wrap; line-height: 1.5; }
+  .s-meal .mh { font-weight: 700; }
+  .s-meal .en { color: #333; }
+  .s-red { color: var(--red); white-space: pre-wrap; line-height: 1.5; }
+  .s-gate-title { color: var(--red); font-weight: 700; text-align: center; font-size: 15px; }
+  .s-gate-nums { color: var(--red); text-align: center; margin-top: 6px; }
+  .min-h { min-height: 70px; }
+</style>
+</head>
+<body>
+<header class="app">
+  <h1>✈️ Galley Sheet Creator</h1>
+  <span class="sub">기내식 갤리 시트 입력 → 엑셀 export</span>
+</header>
+
+<div class="layout">
+  <!-- ============ INPUT PANEL ============ -->
+  <div class="panel">
+    <h2>입력</h2>
+
+    <fieldset>
+      <legend>기본 정보</legend>
+      <label>편명 / 제목 (변수)</label>
+      <input type="text" id="title" value="YP132" placeholder="예: YP132" />
+      <label>PAX (당일 손님 수)</label>
+      <input type="number" id="pax" min="0" placeholder="예: 132" />
+    </fieldset>
+
+    <fieldset>
+      <legend>AI 메뉴 인식 (1st / 2nd Meal 자동 입력)</legend>
+      <div class="row">
+        <div>
+          <label>AI 제공자</label>
+          <select id="provider">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="gemini">Gemini (Google)</option>
+            <option value="openai">OpenAI (GPT)</option>
+          </select>
+        </div>
+        <div>
+          <label>모델</label>
+          <input type="text" id="model" value="claude-opus-4-8" />
+        </div>
+      </div>
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="Claude / Gemini / OpenAI API key" />
+      <div class="hint">키는 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다.</div>
+
+      <label>메뉴 이미지 첨부</label>
+      <input type="file" id="mealImages" accept="image/*" multiple />
+      <div class="thumbs" id="thumbs"></div>
+      <div class="btn-row">
+        <button class="btn" id="recognizeBtn">🔍 AI로 메뉴 인식</button>
+        <button class="btn sec sm" id="clearImgBtn">이미지 비우기</button>
+      </div>
+      <div class="ai-status" id="aiStatus"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>1st Meal</legend>
+      <label>요리 (한글 / English)</label>
+      <div id="dishes1"></div>
+      <button class="btn sec sm" data-add="1">+ 요리 추가</button>
+      <div class="row" style="margin-top:10px;">
+        <div><label>A bowl</label><input type="text" id="aBowl1" placeholder="예: 구운 콘 샐러드" /></div>
+        <div><label>D bowl</label><input type="text" id="dBowl1" placeholder="예: 통밀 도라야끼" /></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>2nd Meal</legend>
+      <label>요리 (한글 / English)</label>
+      <div id="dishes2"></div>
+      <button class="btn sec sm" data-add="2">+ 요리 추가</button>
+      <div class="row" style="margin-top:10px;">
+        <div><label>A bowl</label><input type="text" id="aBowl2" placeholder="예: 신선한 과일" /></div>
+        <div><label>D bowl</label><input type="text" id="dBowl2" placeholder="예: 초코파지 휘낭시에" /></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>승객 정보 (직접 입력)</legend>
+      <label>SSR (특별 승객 정보)</label>
+      <textarea id="ssr" placeholder="Special Service Request 내용"></textarea>
+      <label>미취식</label>
+      <textarea id="noMeal" placeholder="미취식 좌석/내용"></textarea>
+      <label>PAX 특이사항 및 약제공</label>
+      <textarea id="paxNote" placeholder="예: 용주시 타이레놀, 보나링, 세티스 제공X"></textarea>
+      <label>2 Door open Gate</label>
+      <textarea id="gate" placeholder="예: 8, 10, 12, 22, 23, 27, 30, 31, 32, 33, 39, 43, 45, 46"></textarea>
+    </fieldset>
+
+    <div class="export-bar">
+      <button class="btn" id="exportBtn" style="width:100%;padding:12px;font-size:15px;">⬇️ 엑셀(.xlsx) 다운로드</button>
+    </div>
+  </div>
+
+  <!-- ============ PREVIEW PANEL ============ -->
+  <div class="panel">
+    <h2>미리보기</h2>
+    <div class="sheet-wrap">
+      <table class="sheet">
+        <colgroup>
+          <col style="width:33%"><col style="width:11%"><col style="width:11%"><col style="width:45%">
+        </colgroup>
+        <tbody>
+          <tr>
+            <td colspan="2" class="s-title">&lt;<span id="pvTitle">YP132</span>&gt;</td>
+            <td colspan="2" class="s-title">PAX : <span id="pvPax"></span></td>
+          </tr>
+          <tr>
+            <td colspan="3" class="s-meal" style="height:300px;">
+              <span class="s-label">●MEAL</span>
+              <div id="pvMeal"></div>
+            </td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="2" class="min-h">
+              <div class="s-label">●SSR</div>
+              <div id="pvSsr" style="white-space:pre-wrap;margin:4px 0 14px;"></div>
+              <div class="s-label">●미취식</div>
+              <div id="pvNoMeal" style="white-space:pre-wrap;"></div>
+            </td>
+            <td colspan="2" class="min-h">
+              <div class="s-label">●PAX 특이사항 및 약제공</div>
+              <div id="pvPaxNote" class="s-red" style="margin-top:6px;"></div>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="4">
+              <div class="s-gate-title">★2 Door open Gate★</div>
+              <div class="s-gate-nums" id="pvGate"></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin-top:14px;">미리보기는 인쇄 시트 레이아웃을 근사하게 표현합니다. 실제 엑셀 파일은 테두리·병합·굵은 글씨·빨간 글씨가 동일하게 적용됩니다.</p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
