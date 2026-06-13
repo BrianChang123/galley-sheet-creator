@@ -15,6 +15,8 @@
      CLAUDE_MODEL, GEMINI_MODEL, OPENAI_MODEL
    ============================================================ */
 
+const heicConvert = require("heic-convert");
+
 const KEY_ENV = {
   claude: "ANTHROPIC_API_KEY",
   gemini: "GEMINI_API_KEY",
@@ -49,6 +51,36 @@ Rules:
 - Each meal usually has 1-3 main dishes in "dishes".
 - If a meal is not present in the image, return it with an empty dishes array and empty bowls.
 - Output JSON only.`;
+
+/* Detect HEIC/HEIF by container brand in the first bytes (mime can be missing/wrong). */
+function looksLikeHeic(buf) {
+  if (buf.length < 12) return false;
+  if (buf.toString("ascii", 4, 8) !== "ftyp") return false;
+  const brand = buf.toString("ascii", 8, 12).toLowerCase();
+  return ["heic", "heix", "heif", "hevc", "mif1", "msf1", "heim", "heis"].includes(brand);
+}
+
+/* Convert any HEIC/HEIF images to JPEG; pass other images through unchanged. */
+async function prepareImages(images) {
+  const out = [];
+  for (const im of images) {
+    const buf = Buffer.from(im.base64 || "", "base64");
+    const isHeic = /heic|heif/i.test(im.mime || "") || looksLikeHeic(buf);
+    if (isHeic) {
+      try {
+        const jpeg = await heicConvert({ buffer: buf, format: "JPEG", quality: 0.9 });
+        out.push({ mime: "image/jpeg", base64: Buffer.from(jpeg).toString("base64") });
+      } catch (e) {
+        const err = new Error("HEIC 이미지를 변환하지 못했습니다. JPEG/PNG로 다시 시도해 주세요.");
+        err.code = "HEIC_CONVERT_FAILED";
+        throw err;
+      }
+    } else {
+      out.push({ mime: im.mime, base64: im.base64 });
+    }
+  }
+  return out;
+}
 
 /* Build an Error tagged with a code; INVALID_KEY -> 401 to the client */
 function providerError(status, bodyText, name) {
@@ -169,14 +201,15 @@ module.exports = async (req, res) => {
 
   const model = modelFor(provider);
   try {
+    const prepared = await prepareImages(images); // HEIC/HEIF -> JPEG
     let text;
-    if (provider === "claude") text = await callClaude(key, model, images);
-    else if (provider === "gemini") text = await callGemini(key, model, images);
-    else text = await callOpenAI(key, model, images);
+    if (provider === "claude") text = await callClaude(key, model, prepared);
+    else if (provider === "gemini") text = await callGemini(key, model, prepared);
+    else text = await callOpenAI(key, model, prepared);
     return res.status(200).json({ ok: true, text });
   } catch (e) {
     const code = e.code || "PROVIDER_ERROR";
-    const status = code === "INVALID_KEY" ? 401 : 502;
+    const status = code === "INVALID_KEY" ? 401 : code === "HEIC_CONVERT_FAILED" ? 400 : 502;
     return res.status(status).json({ ok: false, code, error: e.message || String(e) });
   }
 };

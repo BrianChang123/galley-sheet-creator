@@ -215,19 +215,11 @@ function readFileAsDataURL(blob) {
   });
 }
 
-/* HEIC/HEIF can't be decoded by <img>; detect so we can convert first. */
+/* HEIC/HEIF can't be decoded by <img> in most browsers; the server converts these. */
 function isHeic(file) {
   const t = (file.type || "").toLowerCase();
   const n = (file.name || "").toLowerCase();
   return t.includes("heic") || t.includes("heif") || n.endsWith(".heic") || n.endsWith(".heif");
-}
-
-async function convertHeicToJpeg(file) {
-  if (typeof heic2any !== "function") {
-    throw new Error("HEIC 변환 모듈을 불러오지 못했습니다. JPEG/PNG로 업로드해 주세요.");
-  }
-  const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
-  return Array.isArray(out) ? out[0] : out; // -> Blob (image/jpeg)
 }
 
 function loadImageEl(src) {
@@ -240,9 +232,20 @@ function loadImageEl(src) {
 }
 
 async function fileToImage(file) {
-  // HEIC/HEIF -> JPEG first (OpenAI/Claude/Gemini reject HEIC)
-  const source = isHeic(file) ? await convertHeicToJpeg(file) : file;
-  const original = await readFileAsDataURL(source);
+  // HEIC/HEIF: can't decode in-browser reliably -> send raw bytes; server converts to JPEG.
+  if (isHeic(file)) {
+    const original = await readFileAsDataURL(file);
+    return {
+      name: file.name,
+      mime: file.type || "image/heic",
+      dataUrl: original,
+      base64: String(original).split(",")[1],
+      isHeic: true,
+    };
+  }
+
+  // Decodable image -> downscale client-side to keep the upload small.
+  const original = await readFileAsDataURL(file);
   try {
     const img = await loadImageEl(original);
     const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
@@ -255,12 +258,9 @@ async function fileToImage(file) {
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     return { name: file.name, mime: "image/jpeg", dataUrl, base64: dataUrl.split(",")[1] };
   } catch (_) {
-    // Canvas downscale failed — fall back to the (possibly converted) source bytes.
-    // Derive the mime from the data URL so a converted HEIC is reported as jpeg, not heic.
-    const m = /^data:([^;]+);/.exec(String(original));
     return {
       name: file.name,
-      mime: m ? m[1] : source.type || "image/jpeg",
+      mime: file.type || "image/jpeg",
       dataUrl: original,
       base64: String(original).split(",")[1],
     };
@@ -287,7 +287,13 @@ els.clearImgBtn.addEventListener("click", () => {
 });
 
 function renderThumbs() {
-  els.thumbs.innerHTML = uploadedImages.map((im) => `<img src="${im.dataUrl}" alt="${im.name}" />`).join("");
+  els.thumbs.innerHTML = uploadedImages
+    .map((im) =>
+      im.isHeic
+        ? `<div class="thumb-ph" title="${im.name}">HEIC</div>`
+        : `<img src="${im.dataUrl}" alt="${im.name}" />`
+    )
+    .join("");
 }
 
 /* ============================================================

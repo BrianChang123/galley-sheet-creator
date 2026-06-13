@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Galley Sheet Creator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <style>
   :root {
     --bg: #f4f5f7;
@@ -110,6 +109,7 @@
   .ai-status.busy { color: var(--accent); }
   .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .thumb-ph { width: 56px; height: 56px; border-radius: 6px; border: 1px solid var(--border); background: #eef2f7; color: #6b7280; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
   .export-bar { position: sticky; bottom: 0; }
 
   /* ---------- Sheet preview (mirrors the printed galley sheet) ---------- */

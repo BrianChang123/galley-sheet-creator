@@ -5,5 +5,8 @@
   "description": "Airline galley sheet creator with AI meal recognition and Excel export",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "heic-convert": "^2.1.0"
   }
 }
