@@ -429,21 +429,21 @@ async function exportExcel() {
 
   const KR_FONT = { name: "Malgun Gothic" };
 
-  /* Row 1: Header */
-  ws.mergeCells("A1:B1");
-  ws.mergeCells("C1:D1");
+  /* Row 1: Header. Divider sits at the col3|col4 boundary so it lines up
+     with the vertical line to the right of the MEAL block below. */
+  ws.mergeCells("A1:C1");
   const titleCell = ws.getCell("A1");
   titleCell.value = `<${m.title}>`;
   titleCell.font = { ...KR_FONT, bold: true, size: 18 };
   titleCell.alignment = { vertical: "middle", horizontal: "left" };
-  const paxCell = ws.getCell("C1");
+  const paxCell = ws.getCell("D1");
   paxCell.value = `PAX : ${m.pax || ""}`;
   paxCell.font = { ...KR_FONT, bold: true, size: 18 };
   paxCell.alignment = { vertical: "middle", horizontal: "left" };
   ws.getRow(1).height = 38;
 
-  /* MEAL block (tall, fills upper half) */
-  const MEAL_TOP = 2, MEAL_BOTTOM = 13;
+  /* MEAL block (~2/3 of its previous height) */
+  const MEAL_TOP = 2, MEAL_BOTTOM = 9;
   ws.mergeCells(MEAL_TOP, 1, MEAL_BOTTOM, 3);
   ws.mergeCells(MEAL_TOP, 4, MEAL_BOTTOM, 4);
   for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = 32;
@@ -460,9 +460,9 @@ async function exportExcel() {
   mealCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
   /* Middle band: SSR and 미취식 are SEPARATE stacked cells (divider line between them) */
-  const SSR_TOP = 14, SSR_BOTTOM = 16;
-  const NOMEAL_TOP = 17, NOMEAL_BOTTOM = 19;
-  for (let r = SSR_TOP; r <= NOMEAL_BOTTOM; r++) ws.getRow(r).height = 30;
+  const SSR_TOP = 10, SSR_BOTTOM = 13;
+  const NOMEAL_TOP = 14, NOMEAL_BOTTOM = 17;
+  for (let r = SSR_TOP; r <= NOMEAL_BOTTOM; r++) ws.getRow(r).height = 28;
 
   ws.mergeCells(SSR_TOP, 1, SSR_BOTTOM, 3);
   ws.mergeCells(NOMEAL_TOP, 1, NOMEAL_BOTTOM, 3);
@@ -496,9 +496,9 @@ async function exportExcel() {
   rightMid.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
   /* Bottom: Gate */
-  const GATE_TOP = 20, GATE_BOTTOM = 25;
+  const GATE_TOP = 18, GATE_BOTTOM = 24;
   ws.mergeCells(GATE_TOP, 1, GATE_BOTTOM, 4);
-  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 28;
+  for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = 30;
   const gateCell = ws.getCell(GATE_TOP, 1);
   gateCell.value = {
     richText: [
