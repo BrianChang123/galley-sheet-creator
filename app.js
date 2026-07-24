@@ -295,13 +295,30 @@ els.clearImgBtn.addEventListener("click", () => {
 
 function renderThumbs() {
   els.thumbs.innerHTML = uploadedImages
-    .map((im) =>
-      im.isHeic
+    .map((im, i) => {
+      const inner = im.isHeic
         ? `<div class="thumb-ph" title="${im.name}">HEIC</div>`
-        : `<img src="${im.dataUrl}" alt="${im.name}" />`
-    )
+        : `<img src="${im.dataUrl}" alt="${im.name}" />`;
+      return `<div class="thumb" title="${im.name}">${inner}
+        <button type="button" class="thumb-x" data-idx="${i}" title="이 이미지 제거">✕</button>
+      </div>`;
+    })
     .join("");
 }
+
+/* Remove a single image via the × button on its thumbnail (delegated). */
+els.thumbs.addEventListener("click", (e) => {
+  const btn = e.target.closest(".thumb-x");
+  if (!btn) return;
+  const idx = Number(btn.dataset.idx);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= uploadedImages.length) return;
+  uploadedImages = uploadedImages.filter((_, i) => i !== idx);
+  renderThumbs();
+  if (!uploadedImages.length) {
+    els.mealImages.value = "";
+    setStatus("", "");
+  }
+});
 
 /* ============================================================
    AI meal recognition (via serverless proxy)

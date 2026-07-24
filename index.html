@@ -108,8 +108,19 @@
   .ai-status.err { color: var(--red); }
   .ai-status.busy { color: var(--accent); }
   .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
   .thumb-ph { width: 56px; height: 56px; border-radius: 6px; border: 1px solid var(--border); background: #eef2f7; color: #6b7280; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .thumb { position: relative; }
+  .thumb-x {
+    position: absolute; top: 2px; right: 2px;
+    width: 18px; height: 18px; padding: 0;
+    border: none; border-radius: 50%;
+    background: rgba(17, 24, 39, .8); color: #fff;
+    font-size: 10px; line-height: 18px; text-align: center;
+    cursor: pointer; display: none;
+  }
+  .thumb-x:hover { background: #b91c1c; }
+  .thumb:hover .thumb-x { display: block; }
   .export-bar { position: sticky; bottom: 0; }
 
   /* ---------- Sheet preview (mirrors the printed galley sheet) ---------- */
