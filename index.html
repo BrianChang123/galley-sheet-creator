@@ -145,8 +145,9 @@
   .s-meal .mh { font-weight: 700; }
   .s-meal .en { color: #333; }
   .s-red { color: var(--red); white-space: pre-wrap; line-height: 1.5; }
-  .s-gate-title { color: var(--red); font-weight: 700; text-align: center; font-size: 15px; }
-  .s-gate-nums { color: var(--red); text-align: center; margin-top: 6px; }
+  .s-gate { height: 180px; } /* fixed handwriting space, mirrors the Excel box */
+  .s-gate-title { color: var(--red); font-weight: 700; text-align: left; font-size: 12px; }
+  .s-gate-nums { color: var(--red); text-align: left; margin-top: 6px; }
   .min-h { min-height: 70px; }
 
   /* ---------- Toast notifications ---------- */
@@ -308,7 +309,7 @@
             </td>
           </tr>
           <tr>
-            <td colspan="4">
+            <td colspan="4" class="s-gate">
               <div class="s-gate-title">★2 Door open Gate★</div>
               <div class="s-gate-nums" id="pvGate"></div>
             </td>

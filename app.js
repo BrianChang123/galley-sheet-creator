@@ -478,28 +478,29 @@ async function exportExcel() {
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 1,
-      horizontalCentered: true,
-      verticalCentered: true,
       margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
     },
   });
 
-  // Column widths sized to roughly fill A4 portrait width.
-  ws.getColumn(1).width = 34;
-  ws.getColumn(2).width = 13;
-  ws.getColumn(3).width = 13;
-  ws.getColumn(4).width = 44;
+  /* Content lives in columns B-E. Column A is a narrow spacer so the sheet's
+     left border sits inside the printable area instead of on the paper edge
+     (borders on the very edge get clipped when printing). */
+  ws.getColumn(1).width = 0.8;
+  ws.getColumn(2).width = 32;
+  ws.getColumn(3).width = 12;
+  ws.getColumn(4).width = 12;
+  ws.getColumn(5).width = 42;
 
   const KR_FONT = { name: "Malgun Gothic" };
 
   /* Row 1: Header. Divider sits at the col3|col4 boundary so it lines up
      with the vertical line to the right of the MEAL block below. */
-  ws.mergeCells("A1:C1");
-  const titleCell = ws.getCell("A1");
+  ws.mergeCells("B1:D1");
+  const titleCell = ws.getCell("B1");
   titleCell.value = `<${m.title}>`;
   titleCell.font = { ...KR_FONT, bold: true, size: 18 };
   titleCell.alignment = { vertical: "middle", horizontal: "left" };
-  const paxCell = ws.getCell("D1");
+  const paxCell = ws.getCell("E1");
   paxCell.value = `PAX : ${m.pax || ""}`;
   paxCell.font = { ...KR_FONT, bold: true, size: 18 };
   paxCell.alignment = { vertical: "middle", horizontal: "left" };
@@ -512,11 +513,11 @@ async function exportExcel() {
   mealLines.forEach((l) => { mealContentPt += (l.en ? 10 : 11) * 1.35; });
   const MEAL_TOP = 2, MEAL_ROWS = 7, MEAL_BOTTOM = MEAL_TOP + MEAL_ROWS - 1;
   const mealRowH = Math.ceil(mealContentPt / MEAL_ROWS);
-  ws.mergeCells(MEAL_TOP, 1, MEAL_BOTTOM, 3);
-  ws.mergeCells(MEAL_TOP, 4, MEAL_BOTTOM, 4);
+  ws.mergeCells(MEAL_TOP, 2, MEAL_BOTTOM, 4);
+  ws.mergeCells(MEAL_TOP, 5, MEAL_BOTTOM, 5);
   for (let r = MEAL_TOP; r <= MEAL_BOTTOM; r++) ws.getRow(r).height = mealRowH;
 
-  const mealCell = ws.getCell(MEAL_TOP, 1);
+  const mealCell = ws.getCell(MEAL_TOP, 2);
   const richText = [{ text: "●MEAL\n", font: { ...KR_FONT, bold: true, size: 14 } }];
   mealLines.forEach((l) => {
     richText.push({
@@ -532,11 +533,11 @@ async function exportExcel() {
   const NOMEAL_TOP = 13, NOMEAL_BOTTOM = 16;
   for (let r = SSR_TOP; r <= NOMEAL_BOTTOM; r++) ws.getRow(r).height = 28;
 
-  ws.mergeCells(SSR_TOP, 1, SSR_BOTTOM, 3);
-  ws.mergeCells(NOMEAL_TOP, 1, NOMEAL_BOTTOM, 3);
-  ws.mergeCells(SSR_TOP, 4, NOMEAL_BOTTOM, 4); // PAX note spans both rows on the right
+  ws.mergeCells(SSR_TOP, 2, SSR_BOTTOM, 4);
+  ws.mergeCells(NOMEAL_TOP, 2, NOMEAL_BOTTOM, 4);
+  ws.mergeCells(SSR_TOP, 5, NOMEAL_BOTTOM, 5); // PAX note spans both rows on the right
 
-  const ssrCell = ws.getCell(SSR_TOP, 1);
+  const ssrCell = ws.getCell(SSR_TOP, 2);
   ssrCell.value = {
     richText: [
       { text: "●SSR\n", font: { ...KR_FONT, bold: true, size: 13 } },
@@ -545,7 +546,7 @@ async function exportExcel() {
   };
   ssrCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  const noMealCell = ws.getCell(NOMEAL_TOP, 1);
+  const noMealCell = ws.getCell(NOMEAL_TOP, 2);
   noMealCell.value = {
     richText: [
       { text: "●미취식\n", font: { ...KR_FONT, bold: true, size: 13 } },
@@ -554,7 +555,7 @@ async function exportExcel() {
   };
   noMealCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  const rightMid = ws.getCell(SSR_TOP, 4);
+  const rightMid = ws.getCell(SSR_TOP, 5);
   rightMid.value = {
     richText: [
       { text: "●PAX 특이사항 및 약제공\n", font: { ...KR_FONT, bold: true, size: 13 } },
@@ -563,35 +564,33 @@ async function exportExcel() {
   };
   rightMid.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
-  /* Bottom: Gate — absorbs whatever vertical space the MEAL block didn't use,
-     so the sheet fills one A4 page. */
+  /* Bottom: Gate — FIXED-size blank box. Gate numbers are only known in
+     advance on inbound flights; otherwise the crew writes them by hand,
+     so the box must not resize with the MEAL block or its own content. */
   const GATE_TOP = NOMEAL_BOTTOM + 1; // 17
   const GATE_ROWS = 7;
   const GATE_BOTTOM = GATE_TOP + GATE_ROWS - 1;
-  const HEADER_PT = 38;
-  const MIDDLE_PT = 28 * (NOMEAL_BOTTOM - SSR_TOP + 1); // SSR + 미취식 rows
-  const PAGE_PT = 760; // ~A4 portrait printable height target
-  const gatePt = Math.max(150, PAGE_PT - HEADER_PT - mealRowH * MEAL_ROWS - MIDDLE_PT);
-  const gateRowH = Math.ceil(gatePt / GATE_ROWS);
-  ws.mergeCells(GATE_TOP, 1, GATE_BOTTOM, 4);
+  const GATE_PT = 240; // fixed handwriting space (~8.5cm)
+  const gateRowH = Math.ceil(GATE_PT / GATE_ROWS);
+  ws.mergeCells(GATE_TOP, 2, GATE_BOTTOM, 5);
   for (let r = GATE_TOP; r <= GATE_BOTTOM; r++) ws.getRow(r).height = gateRowH;
-  const gateCell = ws.getCell(GATE_TOP, 1);
+  const gateCell = ws.getCell(GATE_TOP, 2);
   gateCell.value = {
     richText: [
-      { text: "★2 Door open Gate★\n", font: { ...KR_FONT, bold: true, size: 15, color: { argb: "FFD40000" } } },
+      { text: "★2 Door open Gate★\n", font: { ...KR_FONT, bold: true, size: 12, color: { argb: "FFD40000" } } },
       { text: m.gate || "", font: { ...KR_FONT, size: 12, color: { argb: "FFD40000" } } },
     ],
   };
-  gateCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+  gateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
 
   /* Borders (each region bordered -> SSR/미취식 get a divider line between them) */
-  applyBorderToRange(ws, 1, 1, 1, 4);
-  applyBorderToRange(ws, MEAL_TOP, 1, MEAL_BOTTOM, 3);
-  applyBorderToRange(ws, MEAL_TOP, 4, MEAL_BOTTOM, 4);
-  applyBorderToRange(ws, SSR_TOP, 1, SSR_BOTTOM, 3);
-  applyBorderToRange(ws, NOMEAL_TOP, 1, NOMEAL_BOTTOM, 3);
-  applyBorderToRange(ws, SSR_TOP, 4, NOMEAL_BOTTOM, 4);
-  applyBorderToRange(ws, GATE_TOP, 1, GATE_BOTTOM, 4);
+  applyBorderToRange(ws, 1, 2, 1, 5);
+  applyBorderToRange(ws, MEAL_TOP, 2, MEAL_BOTTOM, 4);
+  applyBorderToRange(ws, MEAL_TOP, 5, MEAL_BOTTOM, 5);
+  applyBorderToRange(ws, SSR_TOP, 2, SSR_BOTTOM, 4);
+  applyBorderToRange(ws, NOMEAL_TOP, 2, NOMEAL_BOTTOM, 4);
+  applyBorderToRange(ws, SSR_TOP, 5, NOMEAL_BOTTOM, 5);
+  applyBorderToRange(ws, GATE_TOP, 2, GATE_BOTTOM, 5);
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
