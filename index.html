@@ -209,9 +209,12 @@
       <legend>AI 메뉴 인식 (1st / 2nd Meal 자동 입력)</legend>
       <label>AI 도구 선택</label>
       <select id="provider">
+        <option value="openai">OpenAI (GPT)</option>
+        <!-- 현재 OpenAI만 사용. 재활성화하려면 아래 주석 해제
+             (서버 api/recognize.js는 claude/gemini를 계속 지원함)
         <option value="claude">Claude (Anthropic)</option>
         <option value="gemini">Gemini (Google)</option>
-        <option value="openai">OpenAI (GPT)</option>
+        -->
       </select>
       <div class="hint">API 키는 서버 환경변수(Vercel env)에서 관리됩니다. 페이지에서는 도구만 선택합니다.</div>
 

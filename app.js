@@ -199,8 +199,12 @@ function save() {
 }
 
 function load() {
+  // Restore only if the option is currently offered (hidden providers would
+  // leave the select empty and break /api/recognize with provider "").
   const provider = localStorage.getItem(LS_PROVIDER);
-  if (provider) els.provider.value = provider;
+  if (provider && [...els.provider.options].some((o) => o.value === provider)) {
+    els.provider.value = provider;
+  }
 
   let m = null;
   try {
