@@ -38,6 +38,17 @@ function modelFor(provider) {
 const EXTRACT_PROMPT = `You are reading an airline catering galley sheet / in-flight meal menu image.
 Extract the "1st Meal" and "2nd Meal" information.
 
+The image uses one of two layouts:
+1) Text layout: "1st Meal" / "2nd Meal" blocks with dish lines, plus
+   "A bowl : ..." and "D bowl : ..." lines.
+2) Table layout: columns such as Class / Category / Component / 종류 / Ratio.
+   Category "1st" = first meal, "2nd" = second meal. Map Component rows:
+   - "Entrée" (Entree / Main) rows -> "dishes". When there are multiple entrée
+     options (e.g. Ratio 40% / 60%), include EVERY option as a separate dish.
+   - "Appetizer" row -> "aBowl"
+   - "Dessert" row -> "dBowl"
+   - "Bread" rows: IGNORE (bread is handled separately by cabin class).
+
 Return ONLY a valid JSON object, no markdown, no commentary, in exactly this shape:
 {
   "first":  { "dishes": [ { "kr": "", "en": "" } ], "aBowl": "", "dBowl": "" },
@@ -47,7 +58,8 @@ Return ONLY a valid JSON object, no markdown, no commentary, in exactly this sha
 Rules:
 - "kr" = Korean dish name (main dish line, without a leading dash).
 - "en" = the English translation, WITHOUT the surrounding parentheses. Empty string if none.
-- "aBowl" = the item after "A bowl :". "dBowl" = item after "D bowl :". Empty string if absent.
+- "aBowl" / "dBowl": use the Korean name if present, otherwise the English name.
+  Empty string if absent.
 - Each meal usually has 1-3 main dishes in "dishes".
 - If a meal is not present in the image, return it with an empty dishes array and empty bowls.
 - Output JSON only.`;

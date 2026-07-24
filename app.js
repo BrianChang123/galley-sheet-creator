@@ -16,6 +16,7 @@ const $ = (id) => document.getElementById(id);
 const els = {
   title: $("title"),
   pax: $("pax"),
+  cls: $("cls"),
   provider: $("provider"),
   mealImages: $("mealImages"),
   thumbs: $("thumbs"),
@@ -107,6 +108,7 @@ function getModel() {
   return {
     title: els.title.value.trim() || "YP132",
     pax: els.pax.value.trim(),
+    cls: els.cls.value, // WP(Premium Economy) | EY(Economy)
     first: { dishes: readDishes(1), aBowl: els.aBowl1.value.trim(), dBowl: els.dBowl1.value.trim() },
     second: { dishes: readDishes(2), aBowl: els.aBowl2.value.trim(), dBowl: els.dBowl2.value.trim() },
     ssr: els.ssr.value,
@@ -121,7 +123,7 @@ function getModel() {
    ============================================================ */
 function buildMealLines(model) {
   const lines = [];
-  const addMeal = (header, meal) => {
+  const addMeal = (header, meal, opts = {}) => {
     lines.push({ text: header, bold: true });
     meal.dishes.forEach((d) => {
       if (d.kr) lines.push({ text: "-" + d.kr });
@@ -129,8 +131,10 @@ function buildMealLines(model) {
     });
     if (meal.aBowl) lines.push({ text: "A bowl : " + meal.aBowl });
     if (meal.dBowl) lines.push({ text: "D bowl : " + meal.dBowl });
+    if (opts.bread) lines.push({ text: "Bread : 빵과 버터" });
   };
-  addMeal("1st Meal", model.first);
+  // WP(Premium Economy)만 1st Meal에 빵과 버터 제공; EY는 없음.
+  addMeal("1st Meal", model.first, { bread: model.cls === "WP" });
   lines.push({ text: "", spacer: true }); // blank line(s) between 1st and 2nd meal
   lines.push({ text: "", spacer: true });
   addMeal("2nd Meal", model.second);
@@ -180,6 +184,7 @@ function load() {
   if (m) {
     els.title.value = m.title || "YP132";
     els.pax.value = m.pax || "";
+    els.cls.value = m.cls === "WP" ? "WP" : "EY";
     els.aBowl1.value = m.first?.aBowl || "";
     els.dBowl1.value = m.first?.dBowl || "";
     els.aBowl2.value = m.second?.aBowl || "";
@@ -551,6 +556,7 @@ els.exportBtn.addEventListener("click", () => {
    Wire up change listeners + init
    ============================================================ */
 els.provider.addEventListener("change", onChange);
+els.cls.addEventListener("change", onChange);
 [
   "title", "pax", "aBowl1", "dBowl1", "aBowl2", "dBowl2",
   "ssr", "noMeal", "paxNote", "gate",
