@@ -51,17 +51,20 @@ The image uses one of two layouts:
 
 Return ONLY a valid JSON object, no markdown, no commentary, in exactly this shape:
 {
-  "first":  { "dishes": [ { "kr": "", "en": "" } ], "aBowl": "", "dBowl": "" },
-  "second": { "dishes": [ { "kr": "", "en": "" } ], "aBowl": "", "dBowl": "" }
+  "first":  { "dishes": [ { "kr": "", "en": "" } ],
+              "aBowl": { "kr": "", "en": "" }, "dBowl": { "kr": "", "en": "" } },
+  "second": { "dishes": [ { "kr": "", "en": "" } ],
+              "aBowl": { "kr": "", "en": "" }, "dBowl": { "kr": "", "en": "" } }
 }
 
 Rules:
-- "kr" = Korean dish name (main dish line, without a leading dash).
-- "en" = the English translation, WITHOUT the surrounding parentheses. Empty string if none.
-- "aBowl" / "dBowl": use the Korean name if present, otherwise the English name.
-  Empty string if absent.
+- "kr" = Korean name (without a leading dash).
+- "en" = the English name/translation, WITHOUT the surrounding parentheses.
+- The kr/en rules apply to "dishes", "aBowl" and "dBowl" alike; when the image
+  shows only one language for an item, fill that field and leave the other "".
 - Each meal usually has 1-3 main dishes in "dishes".
-- If a meal is not present in the image, return it with an empty dishes array and empty bowls.
+- If a meal is not present in the image, return it with an empty dishes array
+  and empty bowl fields.
 - Output JSON only.`;
 
 /* Detect HEIC/HEIF by container brand in the first bytes (mime can be missing/wrong). */

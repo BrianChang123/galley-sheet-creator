@@ -26,9 +26,13 @@ const els = {
   dishes1: $("dishes1"),
   dishes2: $("dishes2"),
   aBowl1: $("aBowl1"),
+  aBowlEn1: $("aBowlEn1"),
   dBowl1: $("dBowl1"),
+  dBowlEn1: $("dBowlEn1"),
   aBowl2: $("aBowl2"),
+  aBowlEn2: $("aBowlEn2"),
   dBowl2: $("dBowl2"),
+  dBowlEn2: $("dBowlEn2"),
   ssr: $("ssr"),
   noMeal: $("noMeal"),
   paxNote: $("paxNote"),
@@ -109,8 +113,20 @@ function getModel() {
     title: els.title.value.trim() || "YP132",
     pax: els.pax.value.trim(),
     cls: els.cls.value, // WP(Premium Economy) | EY(Economy)
-    first: { dishes: readDishes(1), aBowl: els.aBowl1.value.trim(), dBowl: els.dBowl1.value.trim() },
-    second: { dishes: readDishes(2), aBowl: els.aBowl2.value.trim(), dBowl: els.dBowl2.value.trim() },
+    first: {
+      dishes: readDishes(1),
+      aBowl: els.aBowl1.value.trim(),
+      aBowlEn: els.aBowlEn1.value.trim(),
+      dBowl: els.dBowl1.value.trim(),
+      dBowlEn: els.dBowlEn1.value.trim(),
+    },
+    second: {
+      dishes: readDishes(2),
+      aBowl: els.aBowl2.value.trim(),
+      aBowlEn: els.aBowlEn2.value.trim(),
+      dBowl: els.dBowl2.value.trim(),
+      dBowlEn: els.dBowlEn2.value.trim(),
+    },
     ssr: els.ssr.value,
     noMeal: els.noMeal.value,
     paxNote: els.paxNote.value,
@@ -123,14 +139,24 @@ function getModel() {
    ============================================================ */
 function buildMealLines(model) {
   const lines = [];
+  // Bowls print like dishes: Korean line, then "(English)" underneath.
+  // English-only input still gets the label so the line stays identifiable.
+  const addBowl = (label, kr, en) => {
+    if (kr) {
+      lines.push({ text: label + " : " + kr });
+      if (en) lines.push({ text: "(" + en + ")", en: true });
+    } else if (en) {
+      lines.push({ text: label + " : " + en });
+    }
+  };
   const addMeal = (header, meal, opts = {}) => {
     lines.push({ text: header, bold: true });
     meal.dishes.forEach((d) => {
       if (d.kr) lines.push({ text: "-" + d.kr });
       if (d.en) lines.push({ text: "(" + d.en + ")", en: true });
     });
-    if (meal.aBowl) lines.push({ text: "A bowl : " + meal.aBowl });
-    if (meal.dBowl) lines.push({ text: "D bowl : " + meal.dBowl });
+    addBowl("A bowl", meal.aBowl, meal.aBowlEn);
+    addBowl("D bowl", meal.dBowl, meal.dBowlEn);
     if (opts.bread) lines.push({ text: "Bread : 빵과 버터" });
   };
   // WP(Premium Economy)만 1st Meal에 빵과 버터 제공; EY는 없음.
@@ -186,9 +212,13 @@ function load() {
     els.pax.value = m.pax || "";
     els.cls.value = m.cls === "WP" ? "WP" : "EY";
     els.aBowl1.value = m.first?.aBowl || "";
+    els.aBowlEn1.value = m.first?.aBowlEn || "";
     els.dBowl1.value = m.first?.dBowl || "";
+    els.dBowlEn1.value = m.first?.dBowlEn || "";
     els.aBowl2.value = m.second?.aBowl || "";
+    els.aBowlEn2.value = m.second?.aBowlEn || "";
     els.dBowl2.value = m.second?.dBowl || "";
+    els.dBowlEn2.value = m.second?.dBowlEn || "";
     els.ssr.value = m.ssr || "";
     els.noMeal.value = m.noMeal || "";
     els.paxNote.value = m.paxNote || "";
@@ -389,22 +419,31 @@ function parseJsonLoose(text) {
 }
 
 function applyExtraction(data) {
+  // Bowls may arrive as {kr,en} (current prompt) or a bare string (older shape).
+  const bowl = (b) =>
+    typeof b === "string"
+      ? { kr: b.trim(), en: "" }
+      : { kr: (b?.kr || "").trim(), en: (b?.en || "").trim() };
   const norm = (meal) => ({
     dishes: Array.isArray(meal?.dishes)
       ? meal.dishes.map((d) => ({ kr: (d.kr || "").trim(), en: (d.en || "").trim() }))
       : [],
-    aBowl: (meal?.aBowl || "").trim(),
-    dBowl: (meal?.dBowl || "").trim(),
+    aBowl: bowl(meal?.aBowl),
+    dBowl: bowl(meal?.dBowl),
   });
   const first = norm(data.first);
   const second = norm(data.second);
 
   setDishes(1, first.dishes);
-  els.aBowl1.value = first.aBowl;
-  els.dBowl1.value = first.dBowl;
+  els.aBowl1.value = first.aBowl.kr;
+  els.aBowlEn1.value = first.aBowl.en;
+  els.dBowl1.value = first.dBowl.kr;
+  els.dBowlEn1.value = first.dBowl.en;
   setDishes(2, second.dishes);
-  els.aBowl2.value = second.aBowl;
-  els.dBowl2.value = second.dBowl;
+  els.aBowl2.value = second.aBowl.kr;
+  els.aBowlEn2.value = second.aBowl.en;
+  els.dBowl2.value = second.dBowl.kr;
+  els.dBowlEn2.value = second.dBowl.en;
 
   onChange();
 }
@@ -575,7 +614,9 @@ els.exportBtn.addEventListener("click", () => {
 els.provider.addEventListener("change", onChange);
 els.cls.addEventListener("change", onChange);
 [
-  "title", "pax", "aBowl1", "dBowl1", "aBowl2", "dBowl2",
+  "title", "pax",
+  "aBowl1", "aBowlEn1", "dBowl1", "dBowlEn1",
+  "aBowl2", "aBowlEn2", "dBowl2", "dBowlEn2",
   "ssr", "noMeal", "paxNote", "gate",
 ].forEach((id) => els[id].addEventListener("input", onChange));
 
